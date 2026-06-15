@@ -18,7 +18,7 @@ coverage.*
 profile.cov
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
 
 # Go workspace file
 go.work
@@ -28,5 +28,43 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+
+
+# ── Project-specific ─────────────────────────────────────
+
+# Build output
+/bin/
+/dist/
+
+# Docker artifacts
+*.tar
+*.tar.gz
+
+# Local container state / scratch
+/tmp/
+.scratch/
+
+# Rust vendor cache lockfile churn (the vendor dir itself is checked in)
+images/rust/vendor/.package-cache
+
+# Go image baked module cache (built into the image, never on host)
+images/go/.gopath/
+
+# Cargo target dirs if you ever build Rust locally for debugging
+target/
+
+# Test trajectory logs (InterCode-style episode dumps)
+/trajectories/
+*.jsonl.gz
+
+# Verifier outputs from local runs
+/verifier-outputs/
+
+# macOS / Linux filesystem noise
+.DS_Store
+Thumbs.db
+
+# Skill/CI cache
+.cache/

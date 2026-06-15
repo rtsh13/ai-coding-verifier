@@ -1,0 +1,7 @@
+.git
+internal/
+cmd/
+pkg/
+testdata/
+docs/
+*.md
