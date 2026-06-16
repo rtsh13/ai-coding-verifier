@@ -2,12 +2,13 @@
 
 | Field      | Value                                        |
 |------------|----------------------------------------------|
-| Status     | Accepted                                     |
+| Status     | Accepted (Phase 1 derisking verified 2026-06-15) |
 | Date       | 2026-06-15                                   |
+| Last revised | 2026-06-15 (post-smoke-test)               |
 | Author     | Ruchit Singh                                 |
 | Supervisor | Dr. Luo Mai                                  |
 | Scope      | Phase 1 — Docker images & dependency caching |
-| Related    | `scripts/mining/`, `testdata/mining/2026-06-15/`, `images/go/go.mod` |
+| Related    | `scripts/mining/`, `testdata/mining/2026-06-15/`, `images/go/`, `cmd/smoke/` |
 
 ---
 
@@ -188,78 +189,96 @@ configuration in the dissertation.
 
 The list of 42 packages, with each package's `most_common_version`, is the
 canonical input to `images/go/go.mod`. The mapping from
-`go-prevalence-analysis.json` → `go.mod` is mechanical and reproducible.
+`go-prevalence-analysis.json` → `go.mod` is mechanical and reproducible
+via `scripts/mining/generate_gomod.py`.
 
 ---
 
-## 4. Limitations and threats to validity
+## 4. Toolchain coupling discovered during Phase 1 implementation
 
-### 4.1 Corpus bias
+The baked package set imposes an implicit constraint on the base image's
+Go toolchain version that was not anticipated when ADR-001 was first drafted.
+This section documents the discovery and the principle adopted.
 
-The corpus is the top 1,000 Go repositories on GitHub by star count. This
-biases the sample toward:
+### 4.1 Empirical observation
 
-- **Infrastructure and cloud-native projects** (Kubernetes, Prometheus,
-  Docker / Moby, Traefik, etc.). The K=42 list reflects this — three
-  `k8s.io/*` packages appear in the top 30.
-- **Mature, popular projects.** Newer projects, internal enterprise code,
-  and niche-domain libraries are under-represented.
-- **Library authors over application authors.** Highly-starred Go projects
-  skew toward developer tooling.
+During iterative Docker builds against the K=42 manifest, three sequential
+toolchain version errors were encountered as `go mod download` walked the
+dependency graph:
 
-A submission targeting a domain (e.g., embedded systems, financial
-modelling, scientific computing in Go) that diverges from the
-infrastructure-heavy corpus may import packages absent from the baked set
-and fail to compile under `GOPROXY=off`.
+| Iteration | Base image          | First failing package           | Required Go version |
+|-----------|---------------------|----------------------------------|---------------------|
+| 1         | `golang:1.23-alpine`| `github.com/aws/aws-sdk-go-v2`  | ≥ 1.24              |
+| 2         | `golang:1.24-alpine`| `github.com/fatih/color@v1.19.0`| ≥ 1.25              |
+| 3         | `golang:1.25-alpine`| `k8s.io/api@v0.36.1`            | ≥ 1.26              |
+| 4         | `golang:1.26-alpine`| (build succeeded)               | —                   |
 
-### 4.2 89% manifest yield
+This is a real consequence of the empirical methodology: the modal versions
+selected by prevalence analysis are *current* versions, which means they
+target *current* Go toolchain features.
 
-109 of the 1,000 repos lacked a parseable root `go.mod`. The dominant
-causes are multi-module monorepos and pre-modules repositories. Their
-exclusion is documented and accepted as a scope constraint, but it may
-bias the prevalence numbers slightly toward "well-structured" projects.
+### 4.2 Principle adopted
 
-### 4.3 Direct-only counting
+> **The base image Go toolchain version is determined by the maximum `go`
+> directive across all baked packages, not chosen independently.**
 
-Indirect (transitive) requires are excluded. This is intentional — they
-represent dependencies developers did not *choose*, only inherited — but
-it means some packages that are de facto common at the binary level
-(`golang.org/x/sys`, certain protobuf runtime libraries) may be
-under-counted if most projects pull them transitively rather than directly.
+For the 2026-06-15 manifest, this ceiling is Go 1.26, set by the
+`k8s.io/*` package family. Any future re-mining run may bump this ceiling
+upward; that bump must be reflected in `images/go/Dockerfile` and
+`generate_gomod.py` (`GO_VERSION` constant) before image rebuild.
 
-### 4.4 Temporal snapshot
+### 4.3 Implication for methodology
 
-The mining was conducted on a single date (2026-06-15). Package
-popularity drifts: new packages rise, old ones decay, version churn is
-constant. The selection is a point-in-time snapshot, not a stable
-ranking. A re-mining run several months out would provide a temporal
-stability check; this is left as future work for the dissertation
-defence.
-
-### 4.5 Version selection
-
-For each baked package, the version pinned in `images/go/go.mod` is the
-`most_common_version` from the corpus. This is the modal version, not
-necessarily the latest or the most stable. For most packages this is the
-current release; for `golang.org/x/exp` (and similar pseudo-versioned
-packages) the modal version is essentially a snapshot, and API stability
-is not guaranteed across modal updates.
-
-### 4.6 Cross-language generalisation
-
-This ADR covers Go. The Rust prevalence analysis (via crates.io download
-statistics) is methodologically distinct: crates.io publishes download
-counts directly, sidestepping the need for repository-level scraping.
-The selection criterion for Rust will be addressed in a future ADR. The
-underlying principle (data-driven prevalence over Pareto coverage) is
-expected to carry over, but the empirical shape of the Rust distribution
-may differ.
+This coupling does *not* undermine the prevalence methodology. It does,
+however, mean the image becomes a moving target: the toolchain version
+implicitly tracks ecosystem velocity. The dissertation should acknowledge
+this as a deliberate design choice (privileging empirically-current
+versions over toolchain stability), not as a workaround.
 
 ---
 
-## 5. Reproducibility
+## 5. Offline isolation: full environment variable set
 
-To reproduce the analysis from scratch:
+Implementation revealed that `GOPROXY=off` alone is **not sufficient** for
+network-free execution. Go's default behaviour verifies module checksums
+against the public sum database (`sum.golang.org`) even when modules are
+served from the local cache. Under `--network none`, this verification
+attempt produces a DNS resolution failure:
+
+```
+github.com/google/uuid@v1.6.0: verifying module:
+  Get "https://sum.golang.org/tile/...": dial tcp: lookup sum.golang.org
+  on [::1]:53: read udp [::1]:44241->[::1]:53: read: connection refused
+```
+
+The complete offline-isolation environment, baked into the runtime stage of
+`images/go/Dockerfile`, is:
+
+| Variable       | Value       | Purpose                                              |
+|----------------|-------------|------------------------------------------------------|
+| `GOPROXY`      | `off`       | Reject any attempt to fetch modules from a proxy.   |
+| `GOSUMDB`      | `off`       | Skip checksum verification against the public DB.   |
+| `GOFLAGS`      | `-mod=mod`  | Allow submission `go.mod` resolution against cache. |
+| `GOMODCACHE`   | `/go/pkg/mod` | Pin the module cache location (baked content).    |
+| `GOCACHE`      | `/home/sandbox/.cache/go-build` | Per-user build cache (writable). |
+| `CGO_ENABLED`  | `0`         | Disable cgo to avoid host C library coupling.       |
+| `HOME`         | `/home/sandbox` | Non-root user's home (build cache lives here).  |
+
+The trust model implied by `GOSUMDB=off` is: **the module cache is treated
+as immutable post-bake**. Verification happens at image build time during
+`go mod download` (which has network access); runtime execution trusts
+the cache contents without re-verification.
+
+---
+
+## 6. Reproducibility
+
+Bit-identical image rebuilds require both `go.mod` and `go.sum` to be
+committed alongside the Dockerfile. The `go.sum` file is generated by
+running `go mod download` against the `go.mod` produced by
+`generate_gomod.py`, and must be regenerated whenever `go.mod` changes.
+
+To reproduce the analysis and image from scratch:
 
 ```bash
 # 1. Set up
@@ -278,6 +297,21 @@ python scripts/mining/analyze.py
 
 # 5. Analyse (adopted prevalence methodology)
 python scripts/mining/analyze_prevalence.py
+
+# 6. Generate go.mod from prevalence analysis
+python scripts/mining/generate_gomod.py
+
+# 7. Regenerate go.sum (requires Go installed locally, or use a builder container)
+cd images/go && go mod download && cd ../..
+# OR, without local Go installation:
+# podman run --rm -v $PWD/images/go:/work:Z -w /work \
+#   golang:1.26-alpine sh -c "go mod download"
+
+# 8. Build the image
+podman build -t aicv/go-sandbox:latest images/go
+
+# 9. Verify offline isolation
+make smoke
 ```
 
 All outputs are written to `testdata/mining/<YYYY-MM-DD>/`. The
@@ -286,7 +320,121 @@ canonical reference for the dissertation.
 
 ---
 
-## 6. For the dissertation
+## 7. Phase 1 derisking — verification
+
+On 2026-06-15, the offline isolation foundation was verified end-to-end via
+`cmd/smoke/`, which contains a minimal Go program importing
+`github.com/google/uuid` (one of the K=42 baked packages).
+
+The smoke test command:
+
+```bash
+podman run --rm \
+  --network none \
+  -v $PWD/cmd/smoke:/work:Z \
+  -w /work \
+  --entrypoint sh \
+  aicv/go-sandbox:latest \
+  -c "go build -o /tmp/smoke-bin ./... && /tmp/smoke-bin"
+```
+
+Successful execution emits a generated UUID, demonstrating that:
+
+1. The container has no network namespace (`--network none`).
+2. `go build` resolves dependencies from the baked module cache.
+3. The compiled binary executes within the non-root sandbox user context.
+
+This test is automated as `make smoke` and is the regression check for any
+future change to `images/go/Dockerfile` or the baked manifest.
+
+Image footprint at verification: **984 MB**, comprising a ~250 MB base
+toolchain image and ~730 MB of pre-populated module cache for the 42
+selected packages.
+
+---
+
+## 8. Limitations and threats to validity
+
+### 8.1 Corpus bias
+
+The corpus is the top 1,000 Go repositories on GitHub by star count. This
+biases the sample toward:
+
+- **Infrastructure and cloud-native projects** (Kubernetes, Prometheus,
+  Docker / Moby, Traefik, etc.). The K=42 list reflects this — three
+  `k8s.io/*` packages appear in the top 30.
+- **Mature, popular projects.** Newer projects, internal enterprise code,
+  and niche-domain libraries are under-represented.
+- **Library authors over application authors.** Highly-starred Go projects
+  skew toward developer tooling.
+
+A submission targeting a domain (e.g., embedded systems, financial
+modelling, scientific computing in Go) that diverges from the
+infrastructure-heavy corpus may import packages absent from the baked set
+and fail to compile under `GOPROXY=off`.
+
+### 8.2 89% manifest yield
+
+109 of the 1,000 repos lacked a parseable root `go.mod`. The dominant
+causes are multi-module monorepos and pre-modules repositories. Their
+exclusion is documented and accepted as a scope constraint, but it may
+bias the prevalence numbers slightly toward "well-structured" projects.
+
+### 8.3 Direct-only counting
+
+Indirect (transitive) requires are excluded. This is intentional — they
+represent dependencies developers did not *choose*, only inherited — but
+it means some packages that are de facto common at the binary level
+(`golang.org/x/sys`, certain protobuf runtime libraries) may be
+under-counted if most projects pull them transitively rather than directly.
+
+### 8.4 Temporal snapshot
+
+The mining was conducted on a single date (2026-06-15). Package
+popularity drifts: new packages rise, old ones decay, version churn is
+constant. The selection is a point-in-time snapshot, not a stable
+ranking. A re-mining run several months out would provide a temporal
+stability check; this is left as future work for the dissertation
+defence.
+
+### 8.5 Version selection and toolchain drift
+
+For each baked package, the version pinned in `images/go/go.mod` is the
+`most_common_version` from the corpus. This is the modal version, not
+necessarily the latest or the most stable. For most packages this is the
+current release; for `golang.org/x/exp` (and similar pseudo-versioned
+packages) the modal version is essentially a snapshot, and API stability
+is not guaranteed across modal updates.
+
+The toolchain version is coupled to this selection (Section 4): newer
+modal versions in future re-mining runs may force toolchain bumps. This
+coupling is deliberate, but it implies image rebuilds are *not* a
+no-op operation across re-mining cycles.
+
+### 8.6 Trust model under `GOSUMDB=off`
+
+Runtime checksum verification is disabled (Section 5). This is safe under
+the assumption that the module cache, populated at image build time with
+network-enabled verification, is not subsequently tampered with. Image
+layer immutability under standard OCI semantics provides this guarantee
+in normal deployment but could be violated by a privileged actor with
+write access to the runtime host. Production deployment beyond the
+research scope should consider stronger integrity guarantees (e.g.,
+signed image manifests).
+
+### 8.7 Cross-language generalisation
+
+This ADR covers Go. The Rust prevalence analysis (via crates.io download
+statistics) is methodologically distinct: crates.io publishes download
+counts directly, sidestepping the need for repository-level scraping.
+The selection criterion for Rust will be addressed in a future ADR. The
+underlying principle (data-driven prevalence over Pareto coverage) is
+expected to carry over, but the empirical shape of the Rust distribution
+may differ.
+
+---
+
+## 9. For the dissertation
 
 The methodology section should:
 
@@ -301,7 +449,13 @@ The methodology section should:
 5. Introduce repo-prevalence as the revised methodology.
 6. Show the prevalence curve and report K at four thresholds, selecting
    ≥ 10 % (K=42) as primary.
-7. Document the limitations from Section 4 as threats to validity.
+7. Discuss the toolchain coupling discovered during implementation
+   (Section 4) as an empirical observation about ecosystem velocity.
+8. Document the offline-isolation environment in full (Section 5),
+   including `GOSUMDB=off` and the trust model it implies.
+9. Reference the smoke-test verification (Section 7) as the empirical
+   evidence that the offline isolation architecture is functional.
+10. Document the limitations from Section 8 as threats to validity.
 
 Both the coverage curve and the prevalence curve should appear as figures.
 The coverage curve is the *evidence* that justifies the methodology
@@ -310,12 +464,15 @@ Showing only the second figure would hide the reasoning trail.
 
 ---
 
-## 7. Status of follow-up work
+## 10. Status of follow-up work
 
-- [ ] Generate `images/go/go.mod` from the 42 selected packages.
-- [ ] Write the Go Dockerfile that consumes the generated `go.mod`.
-- [ ] Run the offline smoke test (`docker run --network none -e GOPROXY=off …`)
-      to confirm a hello-world program importing one or more of the 42
-      baked packages compiles successfully.
+- [x] Generate `images/go/go.mod` from the 42 selected packages.
+- [x] Write the Go Dockerfile that consumes the generated `go.mod`.
+- [x] Run the offline smoke test (`podman run --network none ...`)
+      to confirm a hello-world program importing one of the 42
+      baked packages compiles and executes successfully. **Verified 2026-06-15.**
+- [x] Document toolchain coupling and `GOSUMDB=off` discoveries.
+- [ ] Commit `images/go/go.sum` alongside `go.mod` for reproducibility.
+- [ ] Move `cmd/smoke/` into the repository and add `make smoke` target.
 - [ ] Repeat the methodology for Rust (separate ADR).
 - [ ] Optional: re-mine in ~1 month for temporal stability comparison.
