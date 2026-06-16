@@ -21,7 +21,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MINING_ROOT = REPO_ROOT / "testdata" / "mining"
 DEFAULT_OUTPUT = REPO_ROOT / "images" / "go" / "go.mod"
-GO_VERSION = "1.23"
+GO_VERSION = "1.26"
 MODULE_NAME = "sandbox/baked"
 
 
