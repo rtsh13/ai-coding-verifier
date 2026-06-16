@@ -4,11 +4,11 @@
 // Source: testdata/mining/2026-06-15/go-raw.json
 // Mined:  2026-06-15T14:22:14.705470+00:00
 // Methodology: repo-prevalence ≥ 10% (see ADR-001)
-// K = 42 packages, generated 2026-06-15T15:08:28.698758+00:00
+// K = 42 packages, generated 2026-06-16T14:40:20.934999+00:00
 
 module sandbox/baked
 
-go 1.23
+go 1.26
 
 require (
 	github.com/aws/aws-sdk-go-v2         v1.41.5
