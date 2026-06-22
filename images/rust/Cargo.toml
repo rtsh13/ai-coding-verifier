@@ -1,0 +1,66 @@
+# Baked dependency manifest for the Rust sandbox image.
+#
+# This file is GENERATED — do not edit by hand.
+# Source: testdata/mining/2026-06-21/rust-raw.json
+# Mined:  2026-06-21T14:07:31.944600+00:00
+# Methodology: repo-prevalence ≥ 10% (see ADR-001)
+# K = 52 crates, generated 2026-06-22T11:30:38.460815+00:00
+
+[package]
+name = "sandbox-baked"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+anyhow             = "1.0"  # 38.5% (346 repos)
+async-trait        = "0.1"  # 20.1% (181 repos)
+axum               = "0.8"  # 11.9% (107 repos)
+base64             = "0.22"  # 24.2% (218 repos)
+bitflags           = "2"  # 12.3% (111 repos)
+bytes              = "1"  # 19.7% (177 repos)
+chrono             = "0.4"  # 33.7% (303 repos)
+clap               = "4"  # 44.7% (402 repos)
+clap_complete      = "4"  # 12.2% (110 repos)
+crossterm          = "0.29"  # 10.6% (95 repos)
+dirs               = "6.0.0"  # 16.4% (147 repos)
+env_logger         = "0.11"  # 12.5% (112 repos)
+flate2             = "1"  # 12.6% (113 repos)
+futures            = "0.3"  # 26.4% (237 repos)
+futures-util       = "0.3"  # 14.1% (127 repos)
+hex                = "0.4"  # 14.1% (127 repos)
+http               = "1"  # 13.1% (118 repos)
+hyper              = "1"  # 10.1% (91 repos)
+indexmap           = "2.14.0"  # 16.5% (148 repos)
+indicatif          = "0.18"  # 10.3% (93 repos)
+itertools          = "0.14.0"  # 20.5% (184 repos)
+lazy_static        = "1.4.0"  # 13.9% (125 repos)
+libc               = "0.2"  # 18.9% (170 repos)
+log                = "0.4"  # 31.0% (279 repos)
+once_cell          = "1.21.4"  # 16.5% (148 repos)
+parking_lot        = "0.12"  # 15.2% (137 repos)
+proc-macro2        = "1.0"  # 10.1% (91 repos)
+quote              = "1"  # 10.3% (93 repos)
+rand               = "0.8"  # 31.7% (285 repos)
+rayon              = "1.10.0"  # 16.8% (151 repos)
+regex              = "1"  # 35.3% (317 repos)
+reqwest            = "0.12"  # 24.2% (218 repos)
+rustls             = "0.23"  # 13.6% (122 repos)
+semver             = "1"  # 10.5% (94 repos)
+serde              = "1.0"  # 65.3% (587 repos)
+serde_json         = "1.0"  # 53.9% (485 repos)
+serde_yaml         = "0.9"  # 11.8% (106 repos)
+sha2               = "0.10"  # 19.6% (176 repos)
+smallvec           = "1.15.1"  # 11.5% (103 repos)
+strum              = "0.28"  # 14.5% (130 repos)
+syn                = "2"  # 10.7% (96 repos)
+tempfile           = "3"  # 23.7% (213 repos)
+thiserror          = "2"  # 34.5% (310 repos)
+tokio              = "1"  # 41.8% (376 repos)
+tokio-stream       = "0.1"  # 12.3% (111 repos)
+tokio-util         = "0.7"  # 15.4% (138 repos)
+toml               = "0.8"  # 25.3% (227 repos)
+tracing            = "0.1"  # 32.3% (290 repos)
+tracing-subscriber = "0.3"  # 25.6% (230 repos)
+url                = "2"  # 23.2% (209 repos)
+uuid               = "1"  # 22.5% (202 repos)
+walkdir            = "2.5.0"  # 13.7% (123 repos)
