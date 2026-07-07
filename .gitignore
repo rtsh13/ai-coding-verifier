@@ -71,3 +71,10 @@ Thumbs.db
 
 # Personal notes
 /html
+
+prd.md
+task-suite-progress.md
+
+# Task-suite build sources (cloned upstream repos) + local venv — regenerable, never committed
+/data/sources/
+/data/.venv/
