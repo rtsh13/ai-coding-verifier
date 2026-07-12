@@ -127,15 +127,19 @@ func (p *Pool) Release(c *Container) {
 	c.jobs++
 	c.state = Idle
 
-	if p.cfg.MaxJobsPerContainer > 0 && c.jobs >= p.cfg.MaxJobsPerContainer {
-		p.discard(c)
-		return
-	}
-
 	p.mu.Lock()
+	_, alive := p.all[c.id]
 	closed := p.closed
 	p.mu.Unlock()
-	if closed {
+
+	// The container may have been removed while checked out — e.g. reaped by the
+	// TTL manager after its job hung, or torn down by Close. A dead container must
+	// never be re-parked, so there's nothing to do. (The reaper only ever targets
+	// still-checked-out containers, so this cannot race with a normal re-park.)
+	if !alive {
+		return
+	}
+	if closed || (p.cfg.MaxJobsPerContainer > 0 && c.jobs >= p.cfg.MaxJobsPerContainer) {
 		p.discard(c)
 		return
 	}
@@ -145,6 +149,19 @@ func (p *Pool) Release(c *Container) {
 	default:
 		// idle is sized to MaxSize and count <= MaxSize, so this should never
 		// happen; discard defensively rather than block.
+		p.discard(c)
+	}
+}
+
+// RemoveByID force-removes the container with the given id (if the pool still
+// owns it) and frees its capacity slot. It is what the TTL reaper calls to
+// reclaim a container whose job has hung past its deadline; the pool can then
+// grow a fresh replacement. No-op if the container is already gone.
+func (p *Pool) RemoveByID(id string) {
+	p.mu.Lock()
+	c, ok := p.all[id]
+	p.mu.Unlock()
+	if ok {
 		p.discard(c)
 	}
 }

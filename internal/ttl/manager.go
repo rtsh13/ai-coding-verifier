@@ -23,6 +23,7 @@ type Manager struct {
 	mu        sync.Mutex
 	deadlines map[string]time.Time
 	now       func() time.Time // injectable for tests
+	done      chan struct{}    // closed when the sweep goroutine exits
 }
 
 // New creates a Manager that reaps every sweep interval using kill.
@@ -57,9 +58,12 @@ func (m *Manager) Tracked() int {
 	return len(m.deadlines)
 }
 
-// Start runs the sweep loop until ctx is cancelled.
+// Start runs the sweep loop until ctx is cancelled. After cancelling ctx, call
+// Wait to block until any in-flight sweep (and its kills) has finished.
 func (m *Manager) Start(ctx context.Context) {
+	m.done = make(chan struct{})
 	go func() {
+		defer close(m.done)
 		t := time.NewTicker(m.sweep)
 		defer t.Stop()
 		for {
@@ -71,6 +75,15 @@ func (m *Manager) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// Wait blocks until the sweep goroutine has exited, which happens after the ctx
+// passed to Start is cancelled and any in-flight sweep completes. Safe to call
+// even if Start was never called (returns immediately).
+func (m *Manager) Wait() {
+	if m.done != nil {
+		<-m.done
+	}
 }
 
 // sweepOnce reaps every id whose deadline has passed. Kills are invoked outside

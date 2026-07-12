@@ -239,3 +239,49 @@ func TestMaxJobsPerContainer_Recycles(t *testing.T) {
 		t.Errorf("created = %d, want 2 (recycled one replaced)", created)
 	}
 }
+
+func TestRemoveByID_FreesSlotForReplacement(t *testing.T) {
+	f := &fakeBackend{}
+	p, _ := New(f, Config{Image: "img", MinWarm: 0, MaxSize: 1})
+	defer p.Close(context.Background())
+
+	c1 := acquire(t, p)
+	p.RemoveByID(c1.ID()) // reaper nukes it
+
+	if _, removed, _, _ := f.snap(); removed != 1 {
+		t.Errorf("removed = %d, want 1", removed)
+	}
+	if s := p.Stats(); s.Total != 0 {
+		t.Errorf("after RemoveByID: Total=%d, want 0 (slot freed)", s.Total)
+	}
+	// The freed slot lets the pool grow a fresh replacement even at MaxSize 1.
+	c2 := acquire(t, p)
+	if c2.ID() == c1.ID() {
+		t.Errorf("expected a fresh container, got the removed one back")
+	}
+}
+
+func TestRelease_SkipsReapedContainer(t *testing.T) {
+	f := &fakeBackend{}
+	p, _ := New(f, Config{Image: "img", MinWarm: 0, MaxSize: 2})
+	defer p.Close(context.Background())
+
+	c := acquire(t, p)
+	p.RemoveByID(c.ID()) // reaper removes it while it's still "checked out"
+
+	// The job's deferred Release now runs on an already-removed container. It must
+	// NOT re-park a dead container.
+	p.Release(c)
+
+	if s := p.Stats(); s.Idle != 0 || s.Total != 0 {
+		t.Errorf("after reaped Release: stats=%+v, want all zero (nothing re-parked)", s)
+	}
+	// And the pool is still healthy: a fresh acquire works and creates anew.
+	c2, err := p.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire after reaped Release: %v", err)
+	}
+	if c2.ID() == c.ID() {
+		t.Errorf("reaped container was handed back out")
+	}
+}
