@@ -31,6 +31,7 @@ type Config struct {
 	MaxJobsPerContainer int    // recycle a container after this many jobs (0 = unlimited)
 	MemBytes            int64  // per-container memory cap (0 = unlimited)
 	NanoCPUs            int64  // per-container CPU cap (0 = unlimited)
+	PidsLimit           int64  // per-container process cap (0 = unlimited); bounds fork bombs
 }
 
 var (
@@ -228,11 +229,12 @@ func (p *Pool) grow(ctx context.Context) (*Container, error) {
 
 func (p *Pool) create(ctx context.Context) (*Container, error) {
 	id, err := p.backend.Create(ctx, dockercli.CreateConfig{
-		Image:    p.cfg.Image,
-		Cmd:      []string{"sleep", "2147483647"},
-		Network:  "none",
-		MemBytes: p.cfg.MemBytes,
-		NanoCPUs: p.cfg.NanoCPUs,
+		Image:     p.cfg.Image,
+		Cmd:       []string{"sleep", "2147483647"},
+		Network:   "none",
+		MemBytes:  p.cfg.MemBytes,
+		NanoCPUs:  p.cfg.NanoCPUs,
+		PidsLimit: p.cfg.PidsLimit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)

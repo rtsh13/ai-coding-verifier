@@ -49,15 +49,17 @@ func (c *Client) Close() error {
 // created with a long-lived Cmd (e.g. sleep) so the pool can Exec many jobs into
 // them without paying container start-up cost each time.
 type CreateConfig struct {
-	Image    string
-	Cmd      []string // container process; use a sleep loop for pooled containers
-	Env      []string
-	Network  string // "none" for offline isolation
-	MemBytes int64  // 0 = unlimited
-	NanoCPUs int64  // 0 = unlimited; 1 CPU = 1_000_000_000
-	WorkDir  string
+	Image     string
+	Cmd       []string // container process; use a sleep loop for pooled containers
+	Env       []string
+	Network   string // "none" for offline isolation
+	MemBytes  int64  // 0 = unlimited
+	NanoCPUs  int64  // 0 = unlimited; 1 CPU = 1_000_000_000
+	PidsLimit int64  // max processes/threads; 0 = unlimited. Bounds fork bombs.
+	WorkDir   string
 	// SeccompProfileJSON, when non-empty, is applied as the container's seccomp
-	// profile (the JSON itself, not a path). Wired up fully in M10.
+	// profile (the JSON itself, not a path). When empty the runtime's default
+	// profile still applies.
 	SeccompProfileJSON string
 }
 
@@ -69,6 +71,10 @@ func (c *Client) Create(ctx context.Context, cfg CreateConfig) (string, error) {
 			Memory:   cfg.MemBytes,
 			NanoCPUs: cfg.NanoCPUs,
 		},
+	}
+	if cfg.PidsLimit > 0 {
+		limit := cfg.PidsLimit
+		hostCfg.Resources.PidsLimit = &limit
 	}
 	if cfg.SeccompProfileJSON != "" {
 		hostCfg.SecurityOpt = []string{"seccomp=" + cfg.SeccompProfileJSON}
