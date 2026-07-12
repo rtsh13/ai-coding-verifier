@@ -1,3 +1,16 @@
+# Print the Podman API socket as a DOCKER_HOST URL. The Docker Go SDK talks to
+# Podman through this. Usage: `export DOCKER_HOST=$(make -s podman-host)`.
+.PHONY: podman-host
+podman-host:
+	@echo unix://$$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')
+
+# Run the integration test suite (needs `podman machine start` + the sandbox
+# images present). Unit tests run with a plain `go test ./...`.
+.PHONY: int-test
+int-test:
+	DOCKER_HOST=unix://$$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}') \
+		go test -tags=integration -race ./...
+
 .PHONY: smoke
 smoke:
 	podman run --rm \
