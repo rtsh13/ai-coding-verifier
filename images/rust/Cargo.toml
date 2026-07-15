@@ -36,6 +36,7 @@ itertools          = "0.14.0"  # 20.5% (184 repos)
 lazy_static        = "1.4.0"  # 13.9% (125 repos)
 libc               = "0.2"  # 18.9% (170 repos)
 log                = "0.4"  # 31.0% (279 repos)
+md5                = "0.7"  # MANUAL: below the >=10% mining threshold, but the HumanEval-X Rust eval harness imports it
 once_cell          = "1.21.4"  # 16.5% (148 repos)
 parking_lot        = "0.12"  # 15.2% (137 repos)
 proc-macro2        = "1.0"  # 10.1% (91 repos)
