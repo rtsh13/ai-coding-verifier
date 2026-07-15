@@ -58,7 +58,9 @@ func Run(ctx context.Context, p *pool.Pool, cli *dockercli.Client, job Job, opts
 		opt(&o)
 	}
 
+	acqStart := time.Now()
 	c, err := p.Acquire(ctx)
+	assignment := time.Since(acqStart)
 	if err != nil {
 		return Result{}, fmt.Errorf("acquire container: %w", err)
 	}
@@ -96,6 +98,8 @@ func Run(ctx context.Context, p *pool.Pool, cli *dockercli.Client, job Job, opts
 		CompilerRaw:  compileRes.Stderr,
 		TimedOut:     compileRes.TimedOut,
 		Duration:     compileRes.Duration,
+		Assignment:   assignment,
+		Compile:      compileRes.Duration,
 	}
 	if compileRes.TimedOut || compileRes.ExitCode != 0 {
 		return res, nil // did not compile; execution never runs
@@ -118,6 +122,7 @@ func Run(ctx context.Context, p *pool.Pool, cli *dockercli.Client, job Job, opts
 	res.TimedOut = execRes.TimedOut
 	res.Crashed = isCrash(execRes.ExitCode)
 	res.Passed = execRes.ExitCode == 0 && !execRes.TimedOut
+	res.Execute = execRes.Duration
 	res.Duration = compileRes.Duration + execRes.Duration
 	return res, nil
 }

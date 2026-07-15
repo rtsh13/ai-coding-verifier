@@ -196,13 +196,14 @@ func cmdBench(args []string) {
 }
 
 type benchResult struct {
-	ID         string `json:"id"`
-	Outcome    string `json:"outcome"`
-	Expected   string `json:"expected,omitempty"`
-	Correct    *bool  `json:"correct,omitempty"`
-	DurationMs int64  `json:"duration_ms"`
-	TimedOut   bool   `json:"timed_out"`
-	Error      string `json:"error,omitempty"`
+	ID           string `json:"id"`
+	Outcome      string `json:"outcome"`
+	Expected     string `json:"expected,omitempty"`
+	Correct      *bool  `json:"correct,omitempty"`
+	DurationMs   int64  `json:"duration_ms"`
+	AssignmentNs int64  `json:"assignment_ns"`
+	TimedOut     bool   `json:"timed_out"`
+	Error        string `json:"error,omitempty"`
 }
 
 // scoreCorrect reports whether an outcome matches its expected verdict. A
@@ -256,6 +257,7 @@ func verifyOne(env *api.Env, spec jobSpec, defaultTTL time.Duration) benchResult
 	}
 	r.Outcome = v.Outcome.String()
 	r.TimedOut = v.TimedOut
+	r.AssignmentNs = v.Assignment.Nanoseconds()
 	if spec.Expected != "" {
 		r.Expected = spec.Expected
 		c := scoreCorrect(spec.Expected, r.Outcome)
@@ -294,6 +296,23 @@ func printSummary(w *os.File, results []benchResult) {
 		}
 		fmt.Fprintf(w, "  latency        mean %dms  p95 %dms  max %dms\n",
 			sum/int64(len(durs)), durs[idx], durs[len(durs)-1])
+	}
+
+	// Assignment latency: time to hand over a warm container (S1 target < 2s).
+	var asn []int64
+	for _, r := range results {
+		if r.Error == "" {
+			asn = append(asn, r.AssignmentNs)
+		}
+	}
+	if len(asn) > 0 {
+		sort.Slice(asn, func(i, j int) bool { return asn[i] < asn[j] })
+		aidx := (95 * len(asn)) / 100
+		if aidx >= len(asn) {
+			aidx = len(asn) - 1
+		}
+		fmt.Fprintf(w, "  assignment     p50 %dns  p95 %dns  max %dns  (warm handoff)\n",
+			asn[len(asn)/2], asn[aidx], asn[len(asn)-1])
 	}
 
 	// Correctness, when jobs carry an expected verdict.

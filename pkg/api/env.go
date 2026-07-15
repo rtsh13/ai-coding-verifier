@@ -87,6 +87,9 @@ func (e *Env) Verify(ctx context.Context, job Job) (Verdict, error) {
 		ExitCode:       res.ExitCode,
 		TimedOut:       res.TimedOut,
 		Duration:       res.Duration,
+		Assignment:     res.Assignment,
+		Compile:        res.Compile,
+		Execute:        res.Execute,
 	}, nil
 }
 

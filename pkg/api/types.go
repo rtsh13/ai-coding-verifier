@@ -32,6 +32,9 @@ type Verdict struct {
 	ExitCode       int
 	TimedOut       bool
 	Duration       time.Duration // total compile + execute time
+	Assignment     time.Duration // time to acquire a warm container (S1)
+	Compile        time.Duration
+	Execute        time.Duration
 }
 
 // Config configures an Env.

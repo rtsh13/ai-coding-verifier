@@ -61,5 +61,10 @@ type Result struct {
 	// assertion. It is what separates a "runtime error" from a "failed test",
 	// the distinction StepCoder's baseline reward draws. The pipeline sets it.
 	Crashed  bool
-	Duration time.Duration
+	Duration time.Duration // total pipeline work: compile + execute (excludes assignment)
+
+	// Timing breakdown, for evaluation.
+	Assignment time.Duration // time to acquire a warm container from the pool (S1: < 2s)
+	Compile    time.Duration // compile-stage wall time
+	Execute    time.Duration // execute-stage wall time (0 if it did not compile)
 }
