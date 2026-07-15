@@ -158,6 +158,7 @@ func cmdBench(args []string) {
 	fs := flag.NewFlagSet("bench", flag.ExitOnError)
 	image := fs.String("image", "rust-sandbox", "sandbox image")
 	concurrency := fs.Int("concurrency", 4, "parallel jobs / pool size")
+	maxJobs := fs.Int("max-jobs", 0, "recycle a container after this many jobs (0 = never)")
 	ttlSecs := fs.Int("ttl", 60, "default per-job wall-clock limit, seconds")
 	out := fs.String("out", "", "write per-job results as JSONL to this file (default: stdout)")
 	_ = fs.Parse(args)
@@ -184,7 +185,7 @@ func cmdBench(args []string) {
 		w = wf
 	}
 
-	env := mustEnv(api.Config{Image: *image, MinWarm: *concurrency, MaxSize: *concurrency})
+	env := mustEnv(api.Config{Image: *image, MinWarm: *concurrency, MaxSize: *concurrency, MaxJobsPerContainer: *maxJobs})
 	defer env.Close(context.Background())
 
 	results := runBench(env, specs, *concurrency, time.Duration(*ttlSecs)*time.Second)
