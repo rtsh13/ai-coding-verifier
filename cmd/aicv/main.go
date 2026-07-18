@@ -4,15 +4,18 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/aicv/internal/dataset"
 	"github.com/aicv/internal/verdict"
 	"github.com/aicv/internal/verifier"
 	"github.com/aicv/pkg/api"
@@ -28,6 +31,8 @@ func main() {
 		cmdVerify(os.Args[2:])
 	case "bench":
 		cmdBench(os.Args[2:])
+	case "gen-bench":
+		cmdGenBench(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -36,8 +41,61 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  aicv verify [--lang rust|go] [--image NAME] [--ttl SECS] <path>
-  aicv bench  [--image NAME] [--concurrency N] [--ttl SECS] [--out FILE] <jsonl>`)
+  aicv verify    [--lang rust|go] [--image NAME] [--ttl SECS] <path>
+  aicv bench     [--image NAME] [--concurrency N] [--ttl SECS] [--out FILE] <jsonl>
+  aicv gen-bench [--ttl SECS] [--out FILE] <dataset.jsonl>`)
+}
+
+// cmdGenBench converts a task_suite dataset file into a bench job-spec JSONL,
+// tagging each case with its expected verdict (canonical → pass, buggy → fail).
+func cmdGenBench(args []string) {
+	fs := flag.NewFlagSet("gen-bench", flag.ExitOnError)
+	out := fs.String("out", "", "write job-specs JSONL here (default: stdout)")
+	ttlSecs := fs.Int("ttl", 60, "per-job TTL seconds embedded in each spec")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		fatal("gen-bench: expected exactly one <dataset.jsonl>")
+	}
+
+	f, err := os.Open(fs.Arg(0))
+	must(err)
+	defer f.Close()
+
+	w := os.Stdout
+	if *out != "" {
+		wf, err := os.Create(*out)
+		must(err)
+		defer wf.Close()
+		w = wf
+	}
+	enc := json.NewEncoder(w)
+
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 1024*1024), 8*1024*1024)
+	var records, cases int
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var rec dataset.Record
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			fatal("parse record: " + err.Error())
+		}
+		records++
+		for _, c := range dataset.Convert(rec) {
+			cases++
+			_ = enc.Encode(jobSpec{
+				ID:       c.ID,
+				Lang:     "rust",
+				Files:    c.Files,
+				TTLSecs:  *ttlSecs,
+				Expected: string(c.Expected),
+			})
+		}
+	}
+	must(sc.Err())
+	fmt.Fprintf(os.Stderr, "%d records -> %d known-answer cases\n", records, cases)
 }
 
 func cmdVerify(args []string) {
@@ -140,9 +198,21 @@ func cmdBench(args []string) {
 type benchResult struct {
 	ID         string `json:"id"`
 	Outcome    string `json:"outcome"`
+	Expected   string `json:"expected,omitempty"`
+	Correct    *bool  `json:"correct,omitempty"`
 	DurationMs int64  `json:"duration_ms"`
 	TimedOut   bool   `json:"timed_out"`
 	Error      string `json:"error,omitempty"`
+}
+
+// scoreCorrect reports whether an outcome matches its expected verdict. A
+// "pass"-expected case is correct only if it passed; a "fail"-expected case is
+// correct if the verifier did NOT pass it (any rejection counts).
+func scoreCorrect(expected, outcome string) bool {
+	if expected == "pass" {
+		return outcome == "passed"
+	}
+	return outcome != "passed"
 }
 
 // runBench verifies every spec using a worker pool of the given size.
@@ -186,6 +256,11 @@ func verifyOne(env *api.Env, spec jobSpec, defaultTTL time.Duration) benchResult
 	}
 	r.Outcome = v.Outcome.String()
 	r.TimedOut = v.TimedOut
+	if spec.Expected != "" {
+		r.Expected = spec.Expected
+		c := scoreCorrect(spec.Expected, r.Outcome)
+		r.Correct = &c
+	}
 	return r
 }
 
@@ -219,6 +294,28 @@ func printSummary(w *os.File, results []benchResult) {
 		}
 		fmt.Fprintf(w, "  latency        mean %dms  p95 %dms  max %dms\n",
 			sum/int64(len(durs)), durs[idx], durs[len(durs)-1])
+	}
+
+	// Correctness, when jobs carry an expected verdict.
+	var graded, correct, falsePos, falseNeg int
+	for _, r := range results {
+		if r.Correct == nil {
+			continue
+		}
+		graded++
+		if *r.Correct {
+			correct++
+		}
+		if r.Expected == "fail" && r.Outcome == "passed" {
+			falsePos++ // verifier accepted a broken solution — the dangerous error
+		}
+		if r.Expected == "pass" && r.Outcome != "passed" {
+			falseNeg++ // verifier rejected a correct solution
+		}
+	}
+	if graded > 0 {
+		fmt.Fprintf(w, "  correctness    %d/%d correct  (false-positives %d, false-negatives %d)\n",
+			correct, graded, falsePos, falseNeg)
 	}
 }
 

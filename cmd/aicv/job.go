@@ -87,12 +87,14 @@ func readProjectDir(dir string) (map[string][]byte, error) {
 	return files, nil
 }
 
-// jobSpec is one line of a bench JSONL file: a self-contained job.
+// jobSpec is one line of a bench JSONL file: a self-contained job. Expected, when
+// set ("pass"/"fail"), lets bench score the verdict against ground truth.
 type jobSpec struct {
-	ID      string            `json:"id"`
-	Lang    string            `json:"lang"`
-	Files   map[string]string `json:"files"`
-	TTLSecs int               `json:"ttl_secs"`
+	ID       string            `json:"id"`
+	Lang     string            `json:"lang"`
+	Files    map[string]string `json:"files"`
+	TTLSecs  int               `json:"ttl_secs"`
+	Expected string            `json:"expected,omitempty"`
 }
 
 // job converts a spec into an api.Job (applying a default TTL).
