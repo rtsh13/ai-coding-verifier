@@ -19,10 +19,9 @@ COPY .cargo/config.toml .cargo/config.toml
 COPY src/lib.rs src/lib.rs
 COPY vendor/ vendor/
 
-# Pre-compile all vendored dependencies (release mode for smaller cache)
-# This bakes compiled artifacts into the image layer.
-RUN cargo build --offline --release 2>&1 \
-    && cargo build --offline 2>&1
+# NOTE: dependencies are deliberately NOT pre-compiled. Jobs compile from the
+# vendored sources into their own per-job target dir, so a baked target/ would be
+# ~1.6 GB of dead weight (verified: builds work identically without it).
 
 # ── Stage 2: Runtime sandbox ────────────────────────────────
 FROM rust:1.96-alpine
@@ -38,9 +37,6 @@ COPY --from=vendor /build/Cargo.toml /build/Cargo.lock ./
 COPY --from=vendor /build/.cargo/config.toml .cargo/config.toml
 COPY --from=vendor /build/src/lib.rs src/lib.rs
 COPY --from=vendor /build/vendor/ vendor/
-
-# Pre-compiled dependency artifacts (both debug + release)
-COPY --from=vendor /build/target/ target/
 
 # Job execution directory — submissions land here
 RUN mkdir -p /tmp/exec && chown sandbox:sandbox /tmp/exec
