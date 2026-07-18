@@ -50,6 +50,44 @@ func newHardenedContainer(t *testing.T) (*dockercli.Client, Container) {
 	return c, fakeContainer{id: id}
 }
 
+// newSeccompContainer creates a container with the full containment stack AND
+// the project's custom seccomp whitelist applied, so a test can prove the
+// profile — not some other control — is what blocks a given syscall.
+func newSeccompContainer(t *testing.T) (*dockercli.Client, Container) {
+	t.Helper()
+	profile, err := filepath.Abs(filepath.Join("..", "..", "images", "rust", "seccomp.json"))
+	if err != nil {
+		t.Fatalf("resolve profile path: %v", err)
+	}
+	c, err := dockercli.New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Ping(pctx); err != nil {
+		t.Skipf("podman not reachable (set DOCKER_HOST): %v", err)
+	}
+	id, err := c.Create(context.Background(), dockercli.CreateConfig{
+		Image:              testImage,
+		Cmd:                []string{"sleep", "2147483647"},
+		Network:            "none",
+		PidsLimit:          advPidsLimit,
+		SeccompProfilePath: profile,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := c.Start(context.Background(), id); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = c.Remove(context.Background(), id)
+		_ = c.Close()
+	})
+	return c, fakeContainer{id: id}
+}
+
 func loadScript(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "adversarial", name))
@@ -87,6 +125,24 @@ func TestContainment_FilesystemTamperBlocked(t *testing.T) {
 	res := runAdversarial(t, loadScript(t, "fs_escape.sh"), 10*time.Second)
 	if strings.Contains(res.Stdout, "WROTE_SYSTEM_FILE") {
 		t.Errorf("filesystem tamper NOT contained: %q", res.Stdout)
+	}
+	if !strings.Contains(res.Stdout, "BLOCKED") {
+		t.Errorf("expected BLOCKED; stdout=%q stderr=%q", res.Stdout, res.Stderr)
+	}
+}
+
+func TestContainment_SeccompBlocksUnshare(t *testing.T) {
+	cli, ct := newSeccompContainer(t)
+	res, err := Run(context.Background(), cli, ct, ExecSpec{
+		Cmd:     []string{"sh", "-c", loadScript(t, "syscall_blocked.sh")},
+		WorkDir: "/tmp/adv",
+		TTL:     10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Run adversarial: %v", err)
+	}
+	if strings.Contains(res.Stdout, "REACHED_UNSHARE") {
+		t.Errorf("unshare NOT contained by seccomp: %q", res.Stdout)
 	}
 	if !strings.Contains(res.Stdout, "BLOCKED") {
 		t.Errorf("expected BLOCKED; stdout=%q stderr=%q", res.Stdout, res.Stderr)

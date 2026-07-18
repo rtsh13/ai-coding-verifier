@@ -22,11 +22,13 @@ type fakeBackend struct {
 	nextID    int
 	createErr error
 	startErr  error
+	lastCfg   dockercli.CreateConfig // config of the most recent Create call
 }
 
-func (f *fakeBackend) Create(_ context.Context, _ dockercli.CreateConfig) (string, error) {
+func (f *fakeBackend) Create(_ context.Context, cfg dockercli.CreateConfig) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.lastCfg = cfg
 	if f.createErr != nil {
 		return "", f.createErr
 	}
@@ -283,5 +285,22 @@ func TestRelease_SkipsReapedContainer(t *testing.T) {
 	}
 	if c2.ID() == c.ID() {
 		t.Errorf("reaped container was handed back out")
+	}
+}
+
+// TestPool_PassesSeccompProfile verifies the configured seccomp profile path is
+// handed to the backend when a container is created — otherwise the custom
+// profile would be silently dropped and only the runtime default would apply.
+func TestPool_PassesSeccompProfile(t *testing.T) {
+	const path = "/etc/aicv/seccomp.json"
+	f := &fakeBackend{}
+	p, err := New(f, Config{Image: "img", MinWarm: 1, MaxSize: 1, SeccompProfilePath: path})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer p.Close(context.Background())
+
+	if got := f.lastCfg.SeccompProfilePath; got != path {
+		t.Errorf("seccomp profile path not passed to backend:\n got %q\nwant %q", got, path)
 	}
 }

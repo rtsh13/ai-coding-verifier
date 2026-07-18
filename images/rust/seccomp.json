@@ -1,0 +1,84 @@
+{
+  "_comment": "Deny-by-default seccomp whitelist for the AI Coding Verifier sandbox. defaultAction denies (EPERM) every syscall not explicitly allowed below. The allow-list is the curated set a compiler + test harness needs; the dangerous syscalls a container-escape would use (mount, pivot_root, chroot, unshare, setns, ptrace, process_vm_*, kexec_load, init_module, bpf, perf_event_open, keyctl/add_key, reboot, swapon, settimeofday, iopl/ioperm, ...) are absent and therefore blocked. Applied host-side via SecurityOpt in addition to --network none, non-root uid 1000, PIDs limit, and TTL. See docs/ENGINEERING-RECORD.md.",
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultErrnoRet": 1,
+  "architectures": [
+    "SCMP_ARCH_AARCH64",
+    "SCMP_ARCH_X86_64",
+    "SCMP_ARCH_X86",
+    "SCMP_ARCH_ARM"
+  ],
+  "syscalls": [
+    {
+      "action": "SCMP_ACT_ALLOW",
+      "names": [
+        "read", "write", "readv", "writev", "pread64", "pwrite64",
+        "preadv", "pwritev", "preadv2", "pwritev2", "lseek", "_llseek",
+        "open", "openat", "openat2", "close", "close_range", "creat",
+        "dup", "dup2", "dup3", "pipe", "pipe2", "fcntl", "fcntl64",
+        "flock", "fsync", "fdatasync", "ftruncate", "ftruncate64",
+        "truncate", "truncate64", "fallocate", "sync", "syncfs",
+        "sync_file_range", "readahead", "ioctl",
+
+        "stat", "stat64", "fstat", "fstat64", "lstat", "lstat64",
+        "newfstatat", "fstatat64", "statx", "access", "faccessat",
+        "faccessat2", "readlink", "readlinkat", "getcwd", "chdir",
+        "fchdir", "mkdir", "mkdirat", "rmdir", "rename", "renameat",
+        "renameat2", "link", "linkat", "symlink", "symlinkat", "unlink",
+        "unlinkat", "chmod", "fchmod", "fchmodat", "chown", "chown32",
+        "fchown", "fchown32", "lchown", "lchown32", "fchownat", "umask",
+        "utime", "utimes", "utimensat", "utimensat_time64", "futimesat",
+        "getdents", "getdents64", "statfs", "statfs64", "fstatfs",
+        "fstatfs64", "getxattr", "lgetxattr", "fgetxattr", "listxattr",
+        "llistxattr", "flistxattr", "setxattr", "lsetxattr", "fsetxattr",
+        "removexattr", "lremovexattr", "fremovexattr", "memfd_create",
+
+        "mmap", "mmap2", "munmap", "mremap", "mprotect", "brk", "madvise",
+        "mlock", "mlock2", "munlock", "mlockall", "munlockall", "msync",
+        "membarrier", "mincore",
+
+        "clone", "clone3", "fork", "vfork", "execve", "execveat",
+        "exit", "exit_group", "wait4", "waitid", "waitpid",
+        "set_tid_address", "gettid", "getpid", "getppid", "getpgrp",
+        "getpgid", "setpgid", "getsid", "setsid", "getpriority",
+        "setpriority", "set_robust_list", "get_robust_list", "prctl",
+        "arch_prctl", "rseq",
+
+        "futex", "futex_time64", "futex_waitv", "get_thread_area",
+        "set_thread_area", "sched_yield", "sched_getaffinity",
+        "sched_setaffinity", "sched_getparam", "sched_setparam",
+        "sched_getscheduler", "sched_setscheduler", "sched_get_priority_max",
+        "sched_get_priority_min", "sched_rr_get_interval",
+
+        "rt_sigaction", "rt_sigprocmask", "rt_sigreturn", "rt_sigpending",
+        "rt_sigqueueinfo", "rt_sigsuspend", "rt_sigtimedwait",
+        "rt_tgsigqueueinfo", "sigaltstack", "kill", "tkill", "tgkill",
+        "pause", "signalfd", "signalfd4", "restart_syscall",
+
+        "clock_gettime", "clock_gettime64", "clock_getres",
+        "clock_getres_time64", "clock_nanosleep", "clock_nanosleep_time64",
+        "gettimeofday", "nanosleep", "times", "time", "getrandom",
+
+        "poll", "ppoll", "ppoll_time64", "select", "_newselect", "pselect6",
+        "pselect6_time64", "epoll_create", "epoll_create1", "epoll_ctl",
+        "epoll_wait", "epoll_pwait", "epoll_pwait2", "eventfd", "eventfd2",
+        "inotify_init", "inotify_init1", "inotify_add_watch",
+        "inotify_rm_watch",
+
+        "getuid", "getuid32", "geteuid", "geteuid32", "getgid", "getgid32",
+        "getegid", "getegid32", "getresuid", "getresuid32", "getresgid",
+        "getresgid32", "getgroups", "getgroups32", "setuid", "setgid",
+        "setresuid", "setresgid", "setreuid", "setregid", "setgroups",
+        "capget", "capset",
+
+        "getrlimit", "setrlimit", "prlimit64", "ugetrlimit", "getrusage",
+        "sysinfo", "uname", "getcpu", "sched_getcpu",
+
+        "socket", "socketpair", "bind", "connect", "listen", "accept",
+        "accept4", "getsockname", "getpeername", "getsockopt", "setsockopt",
+        "sendto", "recvfrom", "sendmsg", "recvmsg", "sendmmsg", "recvmmsg",
+        "shutdown"
+      ]
+    }
+  ]
+}
