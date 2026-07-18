@@ -24,15 +24,53 @@ type Job struct {
 	TTL   time.Duration
 }
 
+// Reaper is the subset of ttl.Manager the pipeline uses to register a running
+// job so a hung container can be reclaimed. *ttl.Manager satisfies it.
+type Reaper interface {
+	Track(id string, ttl time.Duration)
+	Untrack(id string)
+}
+
+type options struct {
+	reaper Reaper
+	grace  time.Duration
+}
+
+// Option configures a pipeline Run.
+type Option func(*options)
+
+// WithReaper registers each job's container with a TTL reaper, using a deadline
+// of job.TTL + grace, so the reaper only fires as a last resort — after the
+// normal in-container timeout should already have killed the job.
+func WithReaper(r Reaper, grace time.Duration) Option {
+	return func(o *options) {
+		o.reaper = r
+		o.grace = grace
+	}
+}
+
 // Run compiles the submission and, if it compiles, runs its tests, returning a
 // Result with independent compile/execute attribution. It borrows a warm
 // container from the pool for the duration and returns it afterwards.
-func Run(ctx context.Context, p *pool.Pool, cli *dockercli.Client, job Job) (Result, error) {
+func Run(ctx context.Context, p *pool.Pool, cli *dockercli.Client, job Job, opts ...Option) (Result, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	c, err := p.Acquire(ctx)
 	if err != nil {
 		return Result{}, fmt.Errorf("acquire container: %w", err)
 	}
 	defer p.Release(c)
+
+	// Register with the TTL reaper (if configured). Untrack is deferred so it runs
+	// before Release; a job that finishes normally is untracked well before its
+	// deadline, so the reaper only ever fires for a genuinely hung job.
+	if o.reaper != nil {
+		o.reaper.Track(c.ID(), job.TTL+o.grace)
+		defer o.reaper.Untrack(c.ID())
+	}
 
 	// Isolated per-job dir so a reused container carries no state between jobs.
 	workDir := "/tmp/job-" + randID()
