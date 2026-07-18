@@ -57,10 +57,10 @@ type CreateConfig struct {
 	NanoCPUs  int64  // 0 = unlimited; 1 CPU = 1_000_000_000
 	PidsLimit int64  // max processes/threads; 0 = unlimited. Bounds fork bombs.
 	WorkDir   string
-	// SeccompProfileJSON, when non-empty, is applied as the container's seccomp
-	// profile (the JSON itself, not a path). When empty the runtime's default
-	// profile still applies.
-	SeccompProfileJSON string
+	// SeccompProfilePath, when non-empty, is the path to a seccomp profile the
+	// container runtime loads and applies (podman reads the file host-side via
+	// SecurityOpt). When empty the runtime's default profile still applies.
+	SeccompProfilePath string
 }
 
 // Create creates a container (does not start it) and returns its id.
@@ -76,8 +76,8 @@ func (c *Client) Create(ctx context.Context, cfg CreateConfig) (string, error) {
 		limit := cfg.PidsLimit
 		hostCfg.Resources.PidsLimit = &limit
 	}
-	if cfg.SeccompProfileJSON != "" {
-		hostCfg.SecurityOpt = []string{"seccomp=" + cfg.SeccompProfileJSON}
+	if cfg.SeccompProfilePath != "" {
+		hostCfg.SecurityOpt = []string{"seccomp=" + cfg.SeccompProfilePath}
 	}
 	// Clear any image ENTRYPOINT so Cmd runs directly (pooled containers just
 	// need to stay alive, e.g. `sleep infinity`).

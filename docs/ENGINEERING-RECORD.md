@@ -238,13 +238,48 @@ why**, **limitations**.
   (`testdata/adversarial/*.sh`: network egress, filesystem tamper, fork bomb); a
   containment integration test.
 - **Decisions & why.** The containment stack is **`--network none` + non-root uid
-  1000 + pids limit + TTL + podman's default seccomp profile** (applied
-  automatically; a custom stricter profile is a hook for the future — the
-  `images/*/seccomp.json` files are intentionally empty). Result: **3/3 attacks
-  contained** (network blocked, `/etc` write denied, fork bomb hits `can't fork`
-  and is bounded).
-- **Limitations.** No *custom* seccomp profile; **gVisor** (a stronger user-space
-  kernel isolation option, mentioned in the proposal) is not implemented.
+  1000 + pids limit + TTL + a custom deny-by-default seccomp whitelist** (see the
+  seccomp follow-up below; originally the runtime's *default* profile, with the
+  `images/*/seccomp.json` files empty). Result: **4/4 attacks contained** (network
+  blocked, `/etc` write denied, fork bomb hits `can't fork` and is bounded, and a
+  `unshare(2)` user-namespace escape is denied by the whitelist).
+- **Limitations.** **gVisor** (a stronger user-space kernel isolation option,
+  mentioned in the proposal) is not implemented.
+
+### Custom seccomp whitelist (M10 follow-up)
+- **What.** A deny-by-default seccomp profile (`images/{rust,go}/seccomp.json`,
+  `defaultAction: SCMP_ACT_ERRNO`) with a curated ~200-syscall allow-list covering
+  exactly what the compiler + test harness need; every dangerous syscall a
+  container escape would use (`mount`, `pivot_root`, `chroot`, `unshare`, `setns`,
+  `ptrace`, `process_vm_*`, `kexec_load`, `init_module`, `bpf`, `perf_event_open`,
+  `keyctl`/`add_key`, `reboot`, `swapon`, `settimeofday`, `iopl`/`ioperm`, …) is
+  absent and therefore blocked. Wired end-to-end via a new `SeccompProfilePath`
+  field: `cmd/aicv` (`--seccomp <path>`) → `api.Config` → `pool.Config` →
+  `dockercli.CreateConfig` → `SecurityOpt`.
+- **Decisions & why.**
+  - **Path, not inline JSON.** Podman's Docker-compat API treats the `seccomp=`
+    value as a *file path*, not profile content (passing JSON gave `file name too
+    long` — it `ReadFile`s the value). So the profile is passed by path (also more
+    portable to native podman). The CLI resolves it to an absolute path and
+    fails-fast if the file is missing.
+  - **Curated hardened baseline, not grown-from-zero.** The elegant per-syscall
+    discovery loop (`SCMP_ACT_LOG` default → read the audit log → add the missing
+    syscall) proved unreliable on the Fedora/applehv podman VM — `SCMP_ACT_LOG`
+    produced no `ausearch`-visible records despite `actions_logged` including
+    `log`. So the allow-list was authored from the known compiler/runtime syscall
+    set and **verified empirically** instead (below).
+- **Verification (the key result).** The profile *changes nothing* about
+  correctness: the full 66-job held-out benchmark under the deny-by-default
+  profile scored an **identical 65/66, 0 false-positives, same single `Rust/50`
+  false-negative** — proving the allow-list is complete for the workload (no
+  legitimate compile broke). Enforcement is proven by a **with/without control**:
+  the identical `unshare(2)` (and `keyctl(2)`) call *succeeds* for the unprivileged
+  job **without** the profile and is *blocked* (EPERM) **with** it — isolating
+  seccomp as the specific wall, which the network/non-root/pids controls could not
+  demonstrate. Covered by `TestContainment_SeccompBlocksUnshare` +
+  `testdata/adversarial/syscall_blocked.sh`.
+- **Limitations.** Rust profile verified end-to-end; the (identical) Go profile is
+  verified only on a trivial compile (the Go path is minimal end-to-end anyway).
 
 ### Evaluation-phase work (post-M10)
 - **`internal/dataset` converter.** Turns a **humaneval-x** task_suite record into
@@ -282,7 +317,7 @@ its expected label).
 | S2 | full pipeline latency | < 30s | mean **~7–8s** (dep-heavy Rust), p95 ~11s, max ~23s | ✅ pass |
 | S3 | lightweight image | "minimal" | **1.99 GB** (from 5.18 GB); Go image 984 MB | ✅ pass (honest floor for an offline Rust compiler) |
 | S4 | auto-GC / no leak | bounded, no leak | 200-job soak: peak **4** live containers (= cap), **0 leak** after, per-container procs bounded at **~101** with recycling | ✅ pass |
-| S5 | adversarial containment | ≥ 95% | **3/3 contained** | ✅ pass |
+| S5 | adversarial containment | ≥ 95% | **4/4 contained** (incl. seccomp-specific `unshare`) | ✅ pass |
 | S6 | verdict correctness | low FP/FN | **65/66 correct**, **0 false-positives**, 1 false-negative | ✅ pass |
 | S7 | dependency-cache reuse | speedup | **none** — repeated identical jobs stay flat at ~7s; ~6s/job of dep recompilation is repeated | ⚠️ documented limitation |
 
@@ -364,9 +399,9 @@ Ordered roughly by impact.
    toolchain-pin pass would address it.
 8. **VM memory limits concurrency** for heavy compiles (2 GiB). More RAM (or the
    S7 cache, which cuts per-job memory + time) would allow parallelism.
-9. **No custom seccomp profile / no gVisor.** Podman's default seccomp + network
-   isolation + non-root + pids limit is the current stack; a stricter profile or
-   gVisor is stronger-isolation future work.
+9. **No gVisor.** The containment stack is now a *custom* deny-by-default seccomp
+   whitelist + network isolation + non-root + pids limit + TTL. **gVisor** (a
+   user-space kernel for even stronger isolation) remains future work.
 
 ---
 
@@ -384,6 +419,7 @@ feat/vendor-md5       — md5 crate added to the rust image
 feat/slim-rust-image  — dropped pre-compiled target/ (5.18GB → 1.99GB)
 feat/s1-latency       — assignment/compile/execute timing instrumentation
 feat/s4-soak          — bench --max-jobs (container recycling)
+feat/seccomp-profile  — custom deny-by-default seccomp whitelist + --seccomp flag
 ```
 
 Key specs/records in `docs/`: `PRD-infrastructure.md` (the build spec),
@@ -407,8 +443,9 @@ turns `rustc`/`cargo` JSON into structured diagnostics and a clean verdict — a
 behind a single `Verify(job) → Verdict` API and a CLI. On the held-out HumanEval-X
 Rust ground truth the verifier achieved 65/66 correct with **zero false
 positives**; warm-container assignment is ~375 ns, the full pipeline runs in
-~7–8s (well under the 30s target), attacks are contained (3/3), containers leak
-nothing across a 200-job soak, and the image was reduced 62% to 1.99 GB. The one
+~7–8s (well under the 30s target), attacks are contained (4/4, including a
+seccomp-specific user-namespace escape), containers leak nothing across a 200-job
+soak, and the image was reduced 62% to 1.99 GB. The one
 unmet target — cross-job dependency-cache reuse — is quantified (~6s/job
 recoverable) with a clear implementation path, and is the principal avenue for
 future work.

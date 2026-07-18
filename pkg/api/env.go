@@ -44,6 +44,7 @@ func NewEnv(cfg Config) (*Env, error) {
 		MemBytes:            cfg.MemBytes,
 		NanoCPUs:            cfg.NanoCPUs,
 		PidsLimit:           cfg.PidsLimit,
+		SeccompProfilePath:  cfg.SeccompProfilePath,
 	})
 	if err != nil {
 		_ = cli.Close()

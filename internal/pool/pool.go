@@ -32,6 +32,7 @@ type Config struct {
 	MemBytes            int64  // per-container memory cap (0 = unlimited)
 	NanoCPUs            int64  // per-container CPU cap (0 = unlimited)
 	PidsLimit           int64  // per-container process cap (0 = unlimited); bounds fork bombs
+	SeccompProfilePath  string // path to a custom seccomp profile; empty = runtime default
 }
 
 var (
@@ -235,6 +236,8 @@ func (p *Pool) create(ctx context.Context) (*Container, error) {
 		MemBytes:  p.cfg.MemBytes,
 		NanoCPUs:  p.cfg.NanoCPUs,
 		PidsLimit: p.cfg.PidsLimit,
+
+		SeccompProfilePath: p.cfg.SeccompProfilePath,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)

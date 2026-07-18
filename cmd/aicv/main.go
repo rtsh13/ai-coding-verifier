@@ -161,10 +161,13 @@ func cmdBench(args []string) {
 	maxJobs := fs.Int("max-jobs", 0, "recycle a container after this many jobs (0 = never)")
 	ttlSecs := fs.Int("ttl", 60, "default per-job wall-clock limit, seconds")
 	out := fs.String("out", "", "write per-job results as JSONL to this file (default: stdout)")
+	seccomp := fs.String("seccomp", "", "path to a seccomp profile JSON for sandbox containers (default: runtime default)")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
 		fatal("bench: expected exactly one <jsonl>")
 	}
+	profile, err := resolveSeccompProfile(*seccomp)
+	must(err)
 
 	f, err := os.Open(fs.Arg(0))
 	must(err)
@@ -185,7 +188,7 @@ func cmdBench(args []string) {
 		w = wf
 	}
 
-	env := mustEnv(api.Config{Image: *image, MinWarm: *concurrency, MaxSize: *concurrency, MaxJobsPerContainer: *maxJobs})
+	env := mustEnv(api.Config{Image: *image, MinWarm: *concurrency, MaxSize: *concurrency, MaxJobsPerContainer: *maxJobs, SeccompProfilePath: profile})
 	defer env.Close(context.Background())
 
 	results := runBench(env, specs, *concurrency, time.Duration(*ttlSecs)*time.Second)
