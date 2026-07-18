@@ -42,6 +42,7 @@ type Config struct {
 	MaxJobsPerContainer int           // recycle after N jobs (0 = unlimited)
 	MemBytes            int64         // per-container memory cap
 	NanoCPUs            int64         // per-container CPU cap
+	PidsLimit           int64         // per-container process cap (bounds fork bombs)
 	SweepInterval       time.Duration // reaper sweep cadence (default 5s)
 	ReaperGrace         time.Duration // extra time beyond a job's TTL before reaping (default 30s)
 }

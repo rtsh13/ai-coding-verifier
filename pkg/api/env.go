@@ -43,6 +43,7 @@ func NewEnv(cfg Config) (*Env, error) {
 		MaxJobsPerContainer: cfg.MaxJobsPerContainer,
 		MemBytes:            cfg.MemBytes,
 		NanoCPUs:            cfg.NanoCPUs,
+		PidsLimit:           cfg.PidsLimit,
 	})
 	if err != nil {
 		_ = cli.Close()
