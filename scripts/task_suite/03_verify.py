@@ -56,7 +56,7 @@ def main() -> int:
     for r in heldout:
         split_of[r["id"]] = "heldout"
 
-    # ---- (a) MBPP <-> HumanEval-X name overlap ----------------------------
+    # (a) MBPP <-> HumanEval-X name overlap
     print("== (a) MBPP <-> HumanEval-X entry-point name overlap ==")
     he_names = {r["entry_point"]: r["task_id"] for r in he_x}
 
@@ -78,7 +78,7 @@ def main() -> int:
     else:
         print("  all collisions are PRD-pre-cleared coincidental name reuse. OK.")
 
-    # ---- (b) HumanEval-X duplicate-docstring scan -------------------------
+    # (b) HumanEval-X duplicate-docstring scan
     print("\n== (b) HumanEval-X duplicate-docstring scan ==")
     docstring_to_ids = defaultdict(list)
     for r in he_x:

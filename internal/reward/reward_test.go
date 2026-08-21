@@ -8,7 +8,7 @@ import (
 	"github.com/aicv/internal/verifier"
 )
 
-// --- Result builders for the four outcomes ---
+// Result builders for the four outcomes
 
 func passR() pipeline.Result {
 	return pipeline.Result{Stage: pipeline.StageExecute, Compiled: true, Passed: true}
@@ -38,7 +38,7 @@ func errDiags(n int) []verifier.Diagnostic {
 
 func approx(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 
-// --- Arm A: Coarse (StepCoder's exact four levels) ---
+// Arm A: Coarse (StepCoder's exact four levels)
 
 func TestCoarse_FourLevels(t *testing.T) {
 	cases := []struct {
@@ -69,7 +69,7 @@ func TestCoarse_CompileErrorIsFlat_IgnoresErrorCount(t *testing.T) {
 	}
 }
 
-// --- Arm B: Structured (identical to Coarse except the compile bucket) ---
+// Arm B: Structured (identical to Coarse except the compile bucket)
 
 func TestStructured_SharesAnchorsWithCoarse(t *testing.T) {
 	// Pass, failed-test, and runtime-error must be identical across arms; only
