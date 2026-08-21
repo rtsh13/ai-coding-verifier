@@ -245,8 +245,3 @@ Full data is in `docs/eval-data-2026-08.md` (raw JSONL under
 - `docs/decisions/` — ADRs (baked-dependency selection, Rust as primary language).
 - `docs/eval-data-2026-08.md` — measured results, with raw data under `docs/eval-raw-2026-08/`.
 - `thesis/` — the dissertation this prototype accompanies.
-
----
-
-*Research prototype — interfaces and data formats may change as the
-investigation continues.*
