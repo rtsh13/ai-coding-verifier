@@ -1,0 +1,8 @@
+
+328 jobs
+  compile_error  4
+  passed         162
+  test_failed    162
+  latency        mean 4317ms  p95 5072ms  max 40879ms
+  assignment     p50 375ns  p95 1125ns  max 7250ns  (warm handoff)
+  correctness    326/328 correct  (false-positives 0, false-negatives 2)

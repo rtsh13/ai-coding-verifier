@@ -1,0 +1,5 @@
+{"id":"cache-run-1","outcome":"passed","expected":"pass","correct":true,"duration_ms":3807,"assignment_ns":1542,"timed_out":false}
+{"id":"cache-run-2","outcome":"passed","expected":"pass","correct":true,"duration_ms":4194,"assignment_ns":875,"timed_out":false}
+{"id":"cache-run-3","outcome":"passed","expected":"pass","correct":true,"duration_ms":3859,"assignment_ns":416,"timed_out":false}
+{"id":"cache-run-4","outcome":"passed","expected":"pass","correct":true,"duration_ms":3646,"assignment_ns":542,"timed_out":false}
+{"id":"cache-run-5","outcome":"passed","expected":"pass","correct":true,"duration_ms":3954,"assignment_ns":334,"timed_out":false}
