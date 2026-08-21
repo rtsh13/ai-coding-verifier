@@ -238,6 +238,24 @@ margins; no claim rests on the distance between a measured value and a target.
 Full data is in `docs/eval-data-2026-08.md` (raw JSONL under
 `docs/eval-raw-2026-08/`).
 
+## Data and provenance
+
+All data in the repository is derived from public sources and is either committed
+in regenerable form or reproducible from the included scripts. Nothing was
+hand-authored as ground truth.
+
+| Data | Where it came from | How it was processed | Location |
+|------|--------------------|----------------------|----------|
+| **Task suite** | Three public benchmarks — MultiPL-E HumanEval-Rust and MultiPL-E MBPP-Rust (machine-translated from HumanEval/MBPP) and HumanEval-X-Rust (hand-written). All Rust. | Cloned upstream, prompts built, then split into a contamination-safe train / held-out set **by underlying problem ID** (deterministic, seed `42`). | `task_suite/` (committed); build pipeline in `scripts/task_suite/` (see its README). |
+| **Vendored dependency selection** | `[dependencies]` mined from the top ~1000 starred non-fork Rust (and Go) repos via the GitHub API, ranked by prevalence (fraction of repos using each crate). | Aggregated to a prevalence curve; the high-prevalence set is baked, offline, into the sandbox images. Requires `GITHUB_TOKEN`. | Raw + aggregated JSON and curves under `testdata/mining/<date>/`; miners in `scripts/mining/`; rationale in `docs/decisions/ADR-001`. |
+| **Evaluation results** | Output of the `bench` workflow above, run on the 328-job known-answer set on a 2 GiB Podman VM (Rust 1.96). | Summarised into headline metrics; raw per-job JSONL retained. | `docs/eval-data-2026-08.md` with raw JSONL under `docs/eval-raw-2026-08/`. |
+
+Regenerable material is deliberately **not** committed: upstream clones and the
+Python venv live under `data/` (git-ignored), and Rust build output under
+`images/rust/target/` is generated. No large datasets or model outputs are needed
+to assess the work — every committed artifact above can be rebuilt from the
+scripts and prerequisites listed here.
+
 ## Further reading
 
 - `docs/PRD-infrastructure.md` — the build spec and architecture.
