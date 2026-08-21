@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// --- raw cargo/rustc JSON shapes (only the fields we consume) ---
+// raw cargo/rustc JSON shapes (only the fields we consume)
 
 type rustLine struct {
 	Reason  string       `json:"reason"`

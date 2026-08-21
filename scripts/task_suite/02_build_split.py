@@ -94,7 +94,7 @@ def main() -> None:
     multiple_mbpp = read_jsonl(MULTIPLE_MBPP)
     humaneval_x = read_jsonl(HUMANEVAL_X)
 
-    # ---- Build the split ID sets (deterministic) --------------------------
+    # Build the split ID sets (deterministic)
     rng = random.Random(SEED)
 
     all_he_ids = list(range(164))
@@ -109,7 +109,7 @@ def main() -> None:
     mbpp_train_ids = set(mbpp_ids[:mbpp_cut])
     mbpp_heldout_ids = set(mbpp_ids[mbpp_cut:])
 
-    # ---- Emit combined records --------------------------------------------
+    # Emit combined records
     train: list[dict] = []
     heldout: list[dict] = []
 
@@ -176,7 +176,7 @@ def main() -> None:
     train.sort(key=lambda x: x["id"])
     heldout.sort(key=lambda x: x["id"])
 
-    # ---- Write outputs -----------------------------------------------------
+    # Write outputs
     # Self-contained copies of the source renderings (data/ is git-ignored).
     write_jsonl(OUT_SRC / "multipl-e-humaneval-rs.jsonl", multiple_he)
     write_jsonl(OUT_SRC / "multipl-e-mbpp-rs.jsonl", multiple_mbpp)
@@ -225,7 +225,7 @@ def main() -> None:
     }
     (OUT / "split_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
-    # ---- Console summary + invariant assertions ---------------------------
+    # Console summary + invariant assertions
     print("== Source counts ==")
     print(f"  MultiPL-E HumanEval-Rust : {len(multiple_he)}")
     print(f"  MultiPL-E MBPP-Rust      : {len(multiple_mbpp)}")
